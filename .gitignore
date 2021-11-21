@@ -102,3 +102,12 @@ dist
 
 # TernJS port file
 .tern-port
+
+#Theme Song Dir
+themeSongs/*
+
+#Idea Files
+.idea/*
+
+#Database
+database/*
