@@ -108,5 +108,4 @@ client.on('voiceStateUpdate', (voiceState, voiceState1) => {
     }
 });
 
-//Dev Token Nzc4MTI3MjQ5MjAzMTM0NDY0.X7NdeQ.iLo4vRcBCTTIC0VXZBerIsPyLR8
 client.login(process.env.DISCORD_TOKEN);
