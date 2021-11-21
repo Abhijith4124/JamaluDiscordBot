@@ -16,7 +16,7 @@ function getLyrics(songName, callback) {
             method: 'get',
             url: `https://api.ksoft.si/lyrics/search?q=${songName}`,
             headers: {
-                'Authorization': 'Bearer 254e286c98d4380674269653e4775e464d50f5a8'
+                'Authorization': process.env.KSOFT_AUTH
             }
         };
 

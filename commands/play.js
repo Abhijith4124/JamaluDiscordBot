@@ -349,7 +349,7 @@ module.exports = {
             //If its a playlist
             let playlistId = getYoutubePlaylistId(input);
             const config = {
-                GOOGLE_API_KEY: 'AIzaSyBCisy7-qKhtCQIEOv4SMoe5w-1dNvqZ2w', // require
+                GOOGLE_API_KEY: process.env.GOOGLE_API_KEY, // require
                 PLAYLIST_ITEM_KEY: ['title', 'videoUrl'] // option
             }
             const playlistSummary = new PlaylistSummary(config);
