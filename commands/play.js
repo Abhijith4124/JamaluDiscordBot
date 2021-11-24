@@ -15,12 +15,7 @@ const Meta = require('html-metadata-parser');
 const messages = require('../messages/en_messages');
 const errorEmbed = require('../embeds/errorEmbed.js');
 const outputEmbed = require('../embeds/outputEmbed.js');
-const Authenticator = require('../utils/Authenticator');
 const config = require('../config.json');
-const previousCommand = require("./previous");
-const resumeCommand = require("./resume");
-const pauseCommand = require("./pause");
-const nextCommand = require("./next");
 
 async function processMusic(url, type, message) {
     if (!musicQueue[message.member.guild.id]) {
@@ -158,6 +153,7 @@ async function playMusic(message) {
         
         try {
             musicQueue[message.member.guild.id]['stream'] = discordYtdl(videoInfo.url, musicQueue[message.member.guild.id]['streamConfig']);
+
             musicQueue[message.member.guild.id]['dispatcher'] = musicQueue[message.member.guild.id]['voiceConnection']
                 .play(musicQueue[message.member.guild.id]['stream'], {bitrate: 384, volume: volume / 100, type: 'opus'});
 
@@ -431,6 +427,12 @@ module.exports = {
                 let url = resultVideo.url;
                 await queueMusic({title: song.name, url: url, type: 'youtube'}, message);
             }
+        } else if (!/http(?:s?):\/\/(?:www\.)?youtu(?:be\.com)/.test(input)) {
+            //It was a search Query
+            let searchResult =  await yts(input);
+            const resultVideo = searchResult.videos[0];
+            let url = resultVideo.url;
+            processMusic(url, 'youtube', message);
         } else {
             let playingEmbed = new Discord.MessageEmbed()
                 .setTitle("No Result Found")

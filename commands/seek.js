@@ -7,6 +7,7 @@ const config = require('../config.json');
 const Authenticator = require('../utils/Authenticator');
 const ytdl = require('ytdl-core');
 const Database = require('simplest.db');
+const discordYtdl = require("discord-ytdl-core");
 const db = new Database({
     path: './database/main.json'
 });
@@ -27,6 +28,7 @@ module.exports = {
             }
 
             let seekInput = args[0];
+
             if (seekInput) {
                 let timeStamps = seekInput.split(".").reverse();
                 let hours, minutes, seconds;
@@ -48,20 +50,31 @@ module.exports = {
                     }
                 }
                 let currentMusicQueue = musicQueue[message.member.guild.id][musicQueue[message.member.guild.id]['playingIndex']];
+
                 let videoInfo = currentMusicQueue.info;
+
                 if (timeToSeek < videoInfo.length * 1000){
+                    //If the time to seek to is less than the video length, it is valid
                     let volume = 100;
                     if (db.get(`${message.member.guild.id}_Volume`) !== undefined) {
                         volume = db.get(`${message.member.guild.id}_Volume`);
                     }
+
                     if (videoInfo.type === 'youtube') {
+                        musicQueue[message.member.guild.id]['streamConfig']["seek"] = timeToSeek / 1000;
+
                         musicQueue[message.member.guild.id]['dispatcher'] = musicQueue[message.member.guild.id]['voiceConnection']
-                            .play(musicQueue[message.member.guild.id]['stream'], {bitrate: 384, volume: volume / 100, seek: timeToSeek / 1000});
+                            .play(discordYtdl(videoInfo.url, musicQueue[message.member.guild.id]['streamConfig']));
+
                         musicQueue[message.member.guild.id]['seekTime'] = timeToSeek;
+
+                        console.log(`Seek Time :${ musicQueue[message.member.guild.id]['seekTime']}`)
+
 
                         playCommand.attachDispatcherFinish(message);
                     }
                 }else {
+                    //Timestamp is longer than song so it is invalid
                     message.channel.send(errorEmbed.createErrorEmbed("Invalid TimeStamp To Seek")).then(sentMessage => {
                         setTimeout(() => {
                             sentMessage.delete();
