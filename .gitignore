@@ -110,4 +110,4 @@ themeSongs/*
 .idea/*
 
 #Database
-database/*
+database/main.json

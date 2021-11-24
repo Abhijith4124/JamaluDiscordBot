@@ -17,6 +17,10 @@ const errorEmbed = require('../embeds/errorEmbed.js');
 const outputEmbed = require('../embeds/outputEmbed.js');
 const Authenticator = require('../utils/Authenticator');
 const config = require('../config.json');
+const previousCommand = require("./previous");
+const resumeCommand = require("./resume");
+const pauseCommand = require("./pause");
+const nextCommand = require("./next");
 
 async function processMusic(url, type, message) {
     if (!musicQueue[message.member.guild.id]) {
@@ -77,6 +81,7 @@ async function queueMusic(musicData, message){
 
 async function playMusic(message) {
     let voiceChannel = (musicQueue[message.member.guild.id]['voiceChannel']) ? musicQueue[message.member.guild.id]['voiceChannel'] : message.member.voice.channel;
+
     if (!voiceChannel) {
         message.channel.send(errorEmbed.createErrorEmbed("Join any Voice Channel first")).then(sentMessage => {
             setTimeout(() => {
@@ -85,23 +90,30 @@ async function playMusic(message) {
         });
         return;
     }
+
     let voiceConnection = await voiceChannel.join();
+
     if (!voiceConnection){
         errorEmbed.createErrorEmbed("Could not join the Voice Channel");
         musicQueue[message.member.guild.id] = null;
         return;
     }
+
     voiceConnection.voice.setSelfDeaf(true);
+
     musicQueue[message.member.guild.id]['voiceConnection'] = voiceConnection;
     musicQueue[message.member.guild.id]['voiceChannel'] = voiceChannel;
 
     let volume = 100;
+
     if (db.get(`${message.member.guild.id}_Volume`) !== undefined) {
         volume = db.get(`${message.member.guild.id}_Volume`);
     }
 
     let currentMusicQueue = musicQueue[message.member.guild.id][musicQueue[message.member.guild.id]['playingIndex']];
+
     let info = await ytdl.getBasicInfo(currentMusicQueue.info.url);
+
     let videoInfo = {
         title: info.videoDetails.title,
         author: info.videoDetails.author,
@@ -154,62 +166,42 @@ async function playMusic(message) {
             console.error(e);
             errorOccurred(message);
         }
+
+        createPlayMenu();
+
+        attachDispatcherFinish(message)
     }
 
-    let playingEmbed = new Discord.MessageEmbed()
-        .setTitle(videoInfo.title.toString())
-        .addField(createBar(videoInfo.length, 1, 10)[0],
-            `${new Date(1 * 1000).toISOString().substr(11, 8)}/${new Date(videoInfo.length * 1000).toISOString().substr(11, 8)} ${(videoInfo.live) ? '🔴LIVE' : ''}`)
-        .addField(`Played by`, `<@${currentMusicQueue.owner}>`)
-        .setURL(videoInfo.url);
+    function createPlayMenu(){
 
-    let sentMessage = await message.channel.send(playingEmbed);
+        let playingEmbed = new Discord.MessageEmbed()
+            .setTitle(videoInfo.title.toString())
+            .addField(createBar(videoInfo.length, 1, 10)[0],
+                `${new Date(1 * 1000).toISOString().substr(11, 8)}/${new Date(videoInfo.length * 1000).toISOString().substr(11, 8)} ${(videoInfo.live) ? '🔴LIVE' : ''}`)
+            .addField(`Played by`, `<@${currentMusicQueue.owner}>`)
+            .setURL(videoInfo.url);
 
-    let reactions = ["⏮", "⏯️", "⏭"];
-    for (let reaction of reactions){
-        await sentMessage.react(reaction);
-    }
+        message.channel.send(playingEmbed).then(sentMessage => {
+            let reactions = ["⏮", "⏯️", "⏭"];
 
-    const filter = (reaction, user) => {
-        return reactions.includes(reaction.emoji.name) && reaction.count > 1;
-    };
-
-    const collector = sentMessage.createReactionCollector(filter, {});
-    collector.on('collect', (reaction, user) => {
-        reaction.users.remove(user);
-
-        if (reaction.emoji.name === reactions[0]) {
-            //Previous Button
-            if (user.id === currentMusicQueue.owner) {
-                let previousCommand = require('./previous');
-                previousCommand.execute(message, null);
-            } else {
-                message.channel.send(errorEmbed.createErrorEmbed("You do not have sufficient permission")).then(sentMessage => {
-                    setTimeout(() => {
-                        sentMessage.delete()
-                    }, config.messageDeleteDelay)
-                });
+            for (let reaction of reactions){
+                sentMessage.react(reaction);
             }
-        }
 
-        if (reaction.emoji.name === reactions[1]) {
-            //Play/Pause
-            if (musicQueue[message.member.guild.id]) {
-                if (musicQueue[message.member.guild.id]['musicStatus'] === 'paused' && musicQueue[message.member.guild.id]['dispatcher']) {
+            const filter = (reaction) => {
+                return reactions.includes(reaction.emoji.name) && reaction.count > 1;
+            };
+
+            const collector = sentMessage.createReactionCollector(filter, {});
+
+            collector.on('collect', (reaction, user) => {
+                reaction.users.remove(user);
+
+                if (reaction.emoji.name === reactions[0]) {
+                    //Previous Button
                     if (user.id === currentMusicQueue.owner) {
-                        let resumeCommand = require('./resume');
-                        resumeCommand.execute(message, null)
-                    } else {
-                        message.channel.send(errorEmbed.createErrorEmbed("You do not have sufficient permission")).then(sentMessage => {
-                            setTimeout(() => {
-                                sentMessage.delete()
-                            }, config.messageDeleteDelay)
-                        });
-                    }
-                } else if (musicQueue[message.member.guild.id]['musicStatus'] === 'playing' && musicQueue[message.member.guild.id]['dispatcher']) {
-                    if (user.id === currentMusicQueue.owner) {
-                        let pauseCommand = require('./pause');
-                        pauseCommand.execute(message, null)
+                        let previousCommand = require('./previous');
+                        previousCommand.execute(message, null);
                     } else {
                         message.channel.send(errorEmbed.createErrorEmbed("You do not have sufficient permission")).then(sentMessage => {
                             setTimeout(() => {
@@ -218,46 +210,83 @@ async function playMusic(message) {
                         });
                     }
                 }
-            } else {
-                message.channel.send(errorEmbed.createErrorEmbed(messages.NoSong)).then(sentMessage => {
-                    setTimeout(() => {
-                        sentMessage.delete();
-                    }, config.messageDeleteDelay);
-                });
-            }
-        }
-        if (reaction.emoji.name === reactions[2]) {
-            //Next Button
-            if (user.id === currentMusicQueue.owner) {
-                let nextCommand = require('./next');
-                nextCommand.execute(message, null)
-            } else {
-                message.channel.send(errorEmbed.createErrorEmbed("You do not have sufficient permission")).then(sentMessage => {
-                    setTimeout(() => {
-                        sentMessage.delete()
-                    }, config.messageDeleteDelay)
-                });
-            }
-        }
-    });
 
-    resetPlayingEmbed(message);
+                if (reaction.emoji.name === reactions[1]) {
+                    //Play/Pause
+                    if (musicQueue[message.member.guild.id]) {
+                        if (musicQueue[message.member.guild.id]['musicStatus'] === 'paused' && musicQueue[message.member.guild.id]['dispatcher']) {
+                            if (user.id === currentMusicQueue.owner) {
+                                let resumeCommand = require('./resume');
+                                resumeCommand.execute(message, null)
+                            } else {
+                                message.channel.send(errorEmbed.createErrorEmbed("You do not have sufficient permission")).then(sentMessage => {
+                                    setTimeout(() => {
+                                        sentMessage.delete()
+                                    }, config.messageDeleteDelay)
+                                });
+                            }
+                        } else if (musicQueue[message.member.guild.id]['musicStatus'] === 'playing' && musicQueue[message.member.guild.id]['dispatcher']) {
+                            if (user.id === currentMusicQueue.owner) {
+                                let pauseCommand = require('./pause');
+                                pauseCommand.execute(message, null)
+                            } else {
+                                message.channel.send(errorEmbed.createErrorEmbed("You do not have sufficient permission")).then(sentMessage => {
+                                    setTimeout(() => {
+                                        sentMessage.delete()
+                                    }, config.messageDeleteDelay)
+                                });
+                            }
+                        }
+                    } else {
+                        message.channel.send(errorEmbed.createErrorEmbed(messages.NoSong)).then(sentMessage => {
+                            setTimeout(() => {
+                                sentMessage.delete();
+                            }, config.messageDeleteDelay);
+                        });
+                    }
+                }
+                if (reaction.emoji.name === reactions[2]) {
+                    //Next Button
+                    if (user.id === currentMusicQueue.owner) {
+                        let nextCommand = require('./next');
+                        nextCommand.execute(message, null)
+                    } else {
+                        message.channel.send(errorEmbed.createErrorEmbed("You do not have sufficient permission")).then(sentMessage => {
+                            setTimeout(() => {
+                                sentMessage.delete()
+                            }, config.messageDeleteDelay)
+                        });
+                    }
+                }
+            });
 
-    musicQueue[message.member.guild.id]['playMenu'] = sentMessage;
+            resetPlayingEmbed(message);
+
+            musicQueue[message.member.guild.id]['playMenu'] = sentMessage;
+
+            //Calls the Update Play Menu for the first time to initialize it if the Video is not live
+            musicQueue[message.member.guild.id]['progressUpdate'] = setInterval(updatePlayMenu, 2000);
+        });
+    }
 
     function updatePlayMenu() {
-        if (musicQueue[message.member.guild.id]['musicStatus']  === 'playing' && musicQueue[message.member.guild.id]['playMenu']){
-            let playingEmbed = new Discord.MessageEmbed()
-                .setTitle(videoInfo.title.toString())
-                .addField(createBar((!videoInfo.length) ? 1 : videoInfo.length,
-                    (musicQueue[message.member.guild.id]['dispatcher'].streamTime + musicQueue[message.member.guild.id]['seekTime']) / 1000 + 1, 10)[0],
-                    `${new Date((musicQueue[message.member.guild.id]['dispatcher'].streamTime + musicQueue[message.member.guild.id]['seekTime'])).toISOString().substr(11, 8)}/${new Date(videoInfo.length * 1000).toISOString().substr(11, 8)} ${(videoInfo.live) ? '🔴LIVE' : ''}`)
-                .addField(`Played by`, `<@${currentMusicQueue.owner}>`)
-                .setURL(videoInfo.url);
-            musicQueue[message.member.guild.id]['playMenu'].edit(playingEmbed).catch((error) => {
-                console.error(error)
-                resetPlayingEmbed(message);
-            })
+        if (musicQueue[message.member.guild.id]['musicStatus']  === 'playing'){
+            //If the Play Menu is already there
+            if (musicQueue[message.member.guild.id]['playMenu']){
+                let playingEmbed = new Discord.MessageEmbed()
+                    .setTitle(videoInfo.title.toString())
+                    .addField(createBar((!videoInfo.length) ? 1 : videoInfo.length,
+                            (musicQueue[message.member.guild.id]['dispatcher'].streamTime + musicQueue[message.member.guild.id]['seekTime']) / 1000 + 1, 10)[0],
+                        `${new Date((musicQueue[message.member.guild.id]['dispatcher'].streamTime + musicQueue[message.member.guild.id]['seekTime'])).toISOString().substr(11, 8)}/${new Date(videoInfo.length * 1000).toISOString().substr(11, 8)} ${(videoInfo.live) ? '🔴LIVE' : ''}`)
+                    .addField(`Played by`, `<@${currentMusicQueue.owner}>`)
+                    .setURL(videoInfo.url);
+                musicQueue[message.member.guild.id]['playMenu'].edit(playingEmbed).catch((error) => {
+                    console.error(error)
+                    resetPlayingEmbed(message);
+                })
+            }else {
+
+            }
         }
 
         if ((musicQueue[message.member.guild.id]['dispatcher'].streamTime + musicQueue[message.member.guild.id]['seekTime']) > videoInfo.length * 1000 && !videoInfo.live) {
@@ -265,11 +294,6 @@ async function playMusic(message) {
             resetPlayingEmbed(message);
         }
     }
-
-    //Calls the Update Play Menu for the first time to initialize it if the Video is not live
-    musicQueue[message.member.guild.id]['progressUpdate'] = setInterval(updatePlayMenu, 2000);
-
-    attachDispatcherFinish(message)
 }
 
 function attachDispatcherFinish(message) {
@@ -329,7 +353,10 @@ module.exports = {
     description: "Plays Music",
     aliases: ['p', 'add'],
     async execute(message, args) {
+
         let input = args.join(" ");
+
+        //If there was no input from the user
         if (!input.trim()){
             let playingEmbed = new Discord.MessageEmbed()
                 .setTitle("No Result Found")
@@ -341,42 +368,61 @@ module.exports = {
             });
             return;
         }
+
+        //Detecting the type of input
         if (/http(?:s?):\/\/(?:www\.)?youtu(?:be\.com\/watch\?v=|\.be\/)([\w\-\_]*)(&(amp;)?‌​[\w\?‌​=]*)?/.test(input)) {
-            //It should be a direct url
+            //If its a Single Youtube Link
             let url = args[0];
             processMusic(url, 'youtube', message);
         } else if (/(?:https?:\/\/)?(?:youtu\.be\/|(?:www\.|m\.)?youtube\.com\/(?:playlist|list|embed)(?:\.php)?(?:\?.*list=|\/))([a-zA-Z0-9\-_]+)/.test(input)) {
-            //If its a playlist
+            //If its a youtube playlist
+
             let playlistId = getYoutubePlaylistId(input);
+
             const config = {
                 GOOGLE_API_KEY: process.env.GOOGLE_API_KEY, // require
                 PLAYLIST_ITEM_KEY: ['title', 'videoUrl'] // option
             }
+
             const playlistSummary = new PlaylistSummary(config);
+
             let result = await playlistSummary.getPlaylistItems(playlistId)
             let playlistMusics = result.items;
+
             await processMusic(playlistMusics[0].videoUrl, 'youtube', message, true);
+
             message.channel.send( outputEmbed.createOutputEmbed("Jamalu", `Queued ${playlistMusics.length} Songs`));
+
             playlistMusics.shift();
+
             for (let music of playlistMusics) {
                 await queueMusic({title: music.title, url: music.videoUrl, type: 'youtube'}, message);
             }
         } else if (input.includes("spotify") && input.includes("track")){
             //Spotify Track
             let song = await spotifyUrlInfo.getPreview(input);
+
             let searchResult = await yts(`${song.title} ${song.artist}`);
+
             const resultVideo = searchResult.videos[0];
+
             let url = resultVideo.url;
+
             processMusic(url, 'youtube', message);
         } else if (input.includes("spotify") && input.includes("playlist")){
             //Spotify Playlist
             let songs = await spotifyUrlInfo.getTracks(input);
+
             let result = await yts(`${songs[0].name} ${songs[0].artists[0].name}`);
+
             const resultVideo = result.videos[0];
+
             let url = resultVideo.url;
 
             await processMusic(url, 'youtube', message, true);
+
             songs.shift();
+
             message.channel.send(outputEmbed.createOutputEmbed("Jamalu", `Queued ${songs.length} Songs`));
 
             for (let song of songs) {
@@ -385,14 +431,7 @@ module.exports = {
                 let url = resultVideo.url;
                 await queueMusic({title: song.name, url: url, type: 'youtube'}, message);
             }
-        } else if (!/http(?:s?):\/\/(?:www\.)?youtu(?:be\.com)/.test(input)) {
-            //It is not a Youtube link so getting link here
-            let searchResult =  await yts(input);
-            const resultVideo = searchResult.videos[0];
-            let url = resultVideo.url;
-            processMusic(url, 'youtube', message);
-        }
-        else {
+        } else {
             let playingEmbed = new Discord.MessageEmbed()
                 .setTitle("No Result Found")
                 .setDescription("Failed to find the song you are searching for");
