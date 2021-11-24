@@ -128,11 +128,12 @@ module.exports = {
                     //TODO: Add Support for Spotify urls
                 }else if (url.endsWith(".mp4")){
                     //If its a MP4 url
+                    let tempFileName = `${message.guild.id}_${userId}_temp`;
                     let fileName = `${message.guild.id}_${userId}`;
 
                     let options = {
                         directory: `./${config.themeSongDir}/`,
-                        filename: fileName
+                        filename: tempFileName
                     }
 
                     download(url, options, (error) => {
@@ -142,19 +143,27 @@ module.exports = {
                         }else {
                             //Converting the mp4 file to mp3
                             try {
-                                let process = new ffmpeg(`./${config.themeSongDir}/${fileName}`);
+                                let process = new ffmpeg(`./${config.themeSongDir}/${tempFileName}`);
                                 process.then(function (video) {
                                     video.fnExtractSoundToMP3(`./${config.themeSongDir}/${userId}`, function (error, file) {
                                         if (!error){
-                                            let filePath = `./${config.themeSongDir}/${fileName}`;
+                                            fs.rename(`./${config.themeSongDir}/${userId}.mp3`, `./${config.themeSongDir}/${fileName}`, function(err) {
+                                                if ( err ) {
+                                                    console.log('ERROR: ' + err);
+                                                    message.reply(`Failed to Link Theme Song to ${username}`);
+                                                }else {
+                                                    message.reply(`Linked Theme Song to ${username}`);
+                                                }
+                                            });
+                                            let filePath = `./${config.themeSongDir}/${tempFileName}`;
                                             try {
                                                 fs.unlinkSync(filePath);
                                             }catch (e) {
                                                 console.error(e)
                                             }
-                                            message.reply(`Linked Theme Song to ${username}`);
                                         }else {
                                             console.error(error);
+                                            message.reply(`Failed to Link Theme Song to ${username}`);
                                         }
                                     });
                                 }, function (err) {
@@ -165,7 +174,7 @@ module.exports = {
                             }
                         }
                     })
-                }else if (url.endsWith(".mp4")){
+                }else if (url.endsWith(".mp3")){
                     //If its a MP3 url
                     let fileName = `${message.guild.id}_${userId}`;
 
