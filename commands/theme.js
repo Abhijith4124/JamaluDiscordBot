@@ -33,7 +33,9 @@ module.exports = {
     ],
     async execute(message, args) {
         let method = args[0];
+
         let url = args[1];
+
         if (method === "on"){
             message.channel.send(outputEmbed.createOutputEmbed("Theme Song", "Enabled"))
             db.set(`${message.guild.id}_themeEnabled`, true);
@@ -69,8 +71,11 @@ module.exports = {
                 username = message.member.user.username;
             }
 
+            //TODO: Remove Attachment Support or Request bot to be mentioned in the message
             if (message.attachments.size > 0){
+                //If the User sends the file as an attachment
                 let attachment = message.attachments.toJSON()[0];
+
                 let fileName = `${message.guild.id}_${userId}`;
                 let options = {
                     directory: `./${config.themeSongDir}/`,
@@ -112,6 +117,7 @@ module.exports = {
                     }
                 })
             }else if (url) {
+                //If its a Youtube Video
                 let fileName = `${message.guild.id}_${userId}`;
                 if (/http(?:s?):\/\/(?:www\.)?youtu(?:be\.com\/watch\?v=|\.be\/)([\w\-\_]*)(&(amp;)?‌​[\w\?‌​=]*)?/.test(url)){
                     ytdl(url, {quality: "highestaudio", filter: "audioonly"})
@@ -119,6 +125,64 @@ module.exports = {
                     message.reply(`Linked Theme Song to ${username}`);
                 }else if (url.includes("spotify")){
                     message.reply('Spotify Is Not Supported for Theme Linking at this Moment');
+                    //TODO: Add Support for Spotify urls
+                }else if (url.endsWith(".mp4")){
+                    //If its a MP4 url
+                    let fileName = `${message.guild.id}_${userId}`;
+
+                    let options = {
+                        directory: `./${config.themeSongDir}/`,
+                        filename: fileName
+                    }
+
+                    download(url, options, (error) => {
+                        if (error){
+                            console.error(error);
+                            message.reply(`Failed to Link Theme Song to ${username}.`);
+                        }else {
+                            //Converting the mp4 file to mp3
+                            try {
+                                let process = new ffmpeg(`./${config.themeSongDir}/${fileName}`);
+                                process.then(function (video) {
+                                    video.fnExtractSoundToMP3(`./${config.themeSongDir}/${userId}`, function (error, file) {
+                                        if (!error){
+                                            let filePath = `./${config.themeSongDir}/${fileName}`;
+                                            try {
+                                                fs.unlinkSync(filePath);
+                                            }catch (e) {
+                                                console.error(e)
+                                            }
+                                            message.reply(`Linked Theme Song to ${username}`);
+                                        }else {
+                                            console.error(error);
+                                        }
+                                    });
+                                }, function (err) {
+                                    console.error('Error: ' + err);
+                                });
+                            } catch (e) {
+                                console.error(e);
+                            }
+                        }
+                    })
+                }else if (url.endsWith(".mp4")){
+                    //If its a MP3 url
+                    let fileName = `${message.guild.id}_${userId}`;
+
+                    let options = {
+                        directory: `./${config.themeSongDir}/`,
+                        filename: fileName
+                    }
+
+                    download(url, options, (error) => {
+                        if (error){
+                            console.error(error);
+                            message.reply(`Failed to Link Theme Song to ${username}.`);
+                        }else {
+                            //Linked the Song
+                            message.reply(`Linked Theme Song to ${username}`);
+                        }
+                    })
                 }
             }
         }
