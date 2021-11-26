@@ -25,7 +25,9 @@ module.exports = {
         if (args.length > 0){
             let command = args[0];
             if (command === 'clear') {
-                musicQueue[message.member.guild.id].length = 1;
+                if (musicQueue[message.member.guild.id]){
+                    musicQueue[message.member.guild.id].length = 1;
+                }
                 message.channel.send(outputEmbed.createOutputEmbed("Queue Cleared", 'Queue has been Cleared')).then(sentMessage => {
                     setTimeout(() => {sentMessage.delete();}, config.messageDeleteDelay);
                 })
